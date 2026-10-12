@@ -83,9 +83,16 @@
     <p class="hint">点一行查看完整数据，选中后可用 ↑ ↓ 键切换。</p>
     <div id="tdet"></div>
   </div>
+
+  <div class="card" id="aiCard">
+    <div class="step"><h2>🤖 AI 助手</h2></div>
+    <p class="hint" style="margin:-8px 2px 10px">接入任意大模型，自备 API Key；提问时附带报文概况和选中报文附近的原始数据，由模型按通用诊断知识解读。</p>
+    <div id="ai"></div>
+  </div>
 </div>
 
 <script src="canlog.js"></script>
+<script src="ai.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -96,7 +103,7 @@ const hexOf = (u8, max) => {
   return s + (max && u8.length > max ? ' …' : '');
 };
 const ROW = 24;
-let LOG = null, TIDX = new Uint32Array(0), TSEL = -1;
+let LOG = null, LOGNAME = '', TIDX = new Uint32Array(0), TSEL = -1;
 
 async function openFile(f) {
   if (!f) return;
@@ -106,6 +113,7 @@ async function openFile(f) {
   $('info').innerHTML = `<p class="hint">正在读取 ${esc(f.name)} …</p>`;
   try {
     LOG = await CanLog.read(f.name, await f.arrayBuffer(), p => bar.style.width = Math.round(p * 100) + '%');
+    LOGNAME = f.name;
     bar.style.width = '100%';
     let fd = 0;
     for (let i = 0; i < LOG.n; i++) if (LOG.fl[i] & 2) fd++;
@@ -195,6 +203,21 @@ const drop = $('drop');
 ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', e => openFile(e.dataTransfer.files[0]));
+
+// ---- AI 助手：附带报文概况 + 选中报文及其前后的原始帧 ----
+const rowText = i => `${LOG.t[i].toFixed(6)}  CAN${LOG.ch[i]}  ${hexId(LOG.id[i])}  ${LOG.fl[i] & 1 ? 'Tx' : 'Rx'}  ${LOG.bytes(i).length}${LOG.fl[i] & 2 ? 'FD' : ''}  ${hexOf(LOG.bytes(i))}`;
+AI.mount($('ai'), () => {
+  if (!LOG) return { view: 'log' };
+  const k = TSEL >= 0 ? TIDX.indexOf(TSEL) : 0, a = Math.max(0, k - 20), b = Math.min(TIDX.length, a + 40);
+  const rows = [];
+  for (let j = a; j < b; j++) rows.push((TIDX[j] === TSEL ? '>> ' : '   ') + rowText(TIDX[j]));
+  const q = $('tq').value.trim();
+  return {
+    view: 'log', log: LOG, logName: LOGNAME,
+    trace: TSEL >= 0 ? rowText(TSEL) : '',
+    frames: `【报文列表】筛选：${q || '全部'}（共 ${TIDX.length} 帧），以下为第 ${a + 1}–${b} 帧（时间 s / 通道 / ID / 方向 / 长度 / 数据，>> 为选中行）：\n` + rows.join('\n'),
+  };
+}, { qs: ['解释一下选中的报文', '这些诊断报文在做什么？', '有没有否定响应或异常？', '下一步该怎么排查？'] });
 </script>
 </body>
 </html>
