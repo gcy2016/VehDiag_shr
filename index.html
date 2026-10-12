@@ -73,7 +73,7 @@
     <div class="step"><div class="num">2</div><h2>报文列表</h2></div>
     <div class="tf">
       <input id="tq" placeholder="筛选 ID：如 788 7DF，范围 700-7FF；留空显示全部" autocomplete="off" spellcheck="false">
-      <button id="tAll">全部</button>
+      <button id="tAll">全部</button><button id="tDiag">仅诊断报文</button>
       <span class="cnt" id="tCnt"></span>
     </div>
     <div class="trace">
@@ -188,6 +188,7 @@ $('tv').addEventListener('keydown', e => {
 let ttimer;
 $('tq').addEventListener('input', () => { clearTimeout(ttimer); ttimer = setTimeout(() => LOG && filterTrace(), 300); });
 $('tAll').onclick = () => { $('tq').value = ''; LOG && filterTrace(); };
+$('tDiag').onclick = () => { $('tq').value = '700-7FF'; LOG && filterTrace(); };   // 诊断请求 / 应答 ID 段
 
 $('file').addEventListener('change', e => { openFile(e.target.files[0]); e.target.value = ''; });
 const drop = $('drop');
