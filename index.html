@@ -10,6 +10,10 @@
     --blue: #2a6db5; --blue-d: #22507f; --blue-l: #e8f0fa; --line: #d5dde8; --red: #d93025;
   }
   * { box-sizing: border-box; }
+  /* 手机上禁止页面左右晃动：任何元素略超出屏幕宽度时都不产生横向滚动；关闭 iOS 横屏时的字体自动放大 */
+  html { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body { overflow-x: clip; }
+  .wrap { overflow-wrap: anywhere; }   /* 超长的信号名 / 数据在屏幕内自动换行 */
   body { margin: 0; background: var(--bg); color: var(--text);
     font: 16px/1.6 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
   .wrap { max-width: 1280px; margin: 0 auto; padding: 16px 16px 40px; }
@@ -301,7 +305,7 @@ const AIUI = AI.mount($('ai'), () => {
     trace: TSEL >= 0 ? rowText(TSEL) : '',
     frames: `【报文列表】筛选：${q || '全部'}（共 ${TIDX.length} 帧），以下为第 ${a + 1}–${b} 帧（时间 s / 通道 / ID / 方向 / 长度 / 数据，>> 为选中行）：\n` + rows.join('\n'),
   };
-}, { qs: ['逐条解释这些报文', '这些诊断报文在做什么？', '有没有否定响应或异常？', '下一步该怎么排查？'] });
+});
 $('toAI').onclick = () => AIUI.takeData();   // 选好的报文 → 复制并附带到 AI 助手，打开全屏聊天
 </script>
 </body>
