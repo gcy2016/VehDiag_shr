@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CAN 报文查看</title>
+<style>
+  :root {
+    --bg: #f2f4f7; --card: #fff; --text: #1f2937; --muted: #6b7280;
+    --blue: #2a6db5; --blue-d: #22507f; --blue-l: #e8f0fa; --line: #d5dde8; --red: #d93025;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 16px 16px 40px; }
+  .hero { background: linear-gradient(135deg, var(--blue-d), var(--blue)); color: #fff; border-radius: 16px; padding: 20px; margin-bottom: 14px; }
+  .hero h1 { margin: 0 0 6px; font-size: 22px; }
+  .hero p { margin: 0; opacity: .88; font-size: 14px; }
+  .card { background: var(--card); border-radius: 16px; padding: 18px 16px; margin-bottom: 14px; }
+  .step { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .num { width: 34px; height: 34px; border-radius: 50%; background: var(--blue); color: #fff; display: grid; place-items: center; font-weight: 700; flex: none; }
+  .step h2 { margin: 0; font-size: 18px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 8px 2px 0; }
+  .drop { display: block; border: 2px dashed var(--line); border-radius: 14px; padding: 22px 12px; text-align: center; color: var(--muted); cursor: pointer; }
+  .drop.over { border-color: var(--blue); background: var(--blue-l); }
+  .drop b { color: var(--blue); }
+  .bar { height: 6px; background: var(--blue-l); border-radius: 3px; overflow: hidden; margin-top: 10px; }
+  .bar div { height: 100%; width: 0; background: var(--blue); transition: width .2s; }
+  .kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 12px; }
+  .kv div { background: #f8fafc; border-radius: 10px; padding: 6px 10px; font-size: 14px; word-break: break-all; }
+  .kv small { display: block; color: var(--muted); font-size: 12px; }
+  .warn { color: var(--red); background: #fdecea; border-radius: 10px; padding: 8px 12px; font-size: 14px; margin-top: 10px; }
+  .tf { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
+  .tf input { flex: 1; min-width: 200px; font-size: 15px; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: 10px; outline: none; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .tf input:focus { border-color: var(--blue); }
+  .tf button { border: 1.5px solid var(--line); background: #fff; border-radius: 8px; padding: 6px 10px; font-size: 14px; cursor: pointer; color: var(--blue-d); }
+  .tf .cnt { color: var(--muted); font-size: 13px; }
+  .trace { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font: 12.5px/1 ui-monospace, Menlo, Consolas, monospace; }
+  .trow { display: grid; grid-template-columns: 92px 44px 92px 34px 52px 1fr; align-items: center; height: 24px; line-height: 24px; padding: 0 8px; gap: 6px; white-space: nowrap; }
+  .trow > span { overflow: hidden; text-overflow: ellipsis; }
+  .thead { background: #f1f4f8; color: var(--muted); font-family: -apple-system, "Microsoft YaHei", sans-serif; font-size: 12px; border-bottom: 1px solid var(--line); }
+  .tview { height: 480px; overflow: auto; position: relative; outline: none; }
+  .tview .trow { position: absolute; left: 0; right: 0; cursor: pointer; }
+  .tview .trow:hover { background: #f5f8fc; }
+  .tview .trow.sel { background: var(--blue); color: #fff; }
+  .hexg { font: 13px/1.7 ui-monospace, Menlo, Consolas, monospace; background: #f8fafc; border-radius: 10px; padding: 8px 12px; word-break: break-all; margin-top: 8px; }
+  [hidden] { display: none !important; }
+  @media (max-width: 640px) {
+    .trow { grid-template-columns: 74px 70px 1fr; }
+    .trow > :nth-child(2), .trow > :nth-child(4), .trow > :nth-child(5) { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>📄 CAN 报文查看</h1>
+    <p>打开 Vector .blf / .asc 报文，按 ID 筛选查看 · 文件只在本机浏览器内读取，不会上传</p>
+  </div>
+
+  <div class="card">
+    <div class="step"><div class="num">1</div><h2>打开报文</h2></div>
+    <label class="drop" id="drop">
+      <!-- 不设 accept：iOS 不认识 .blf 扩展名，会把文件置灰无法选择；扩展名在读取时检查 -->
+      <input type="file" id="file" hidden>
+      📂 点击选择或拖入 <b>.blf</b> / <b>.asc</b> 报文文件
+    </label>
+    <div class="bar" id="bar" hidden><div></div></div>
+    <div id="info"></div>
+  </div>
+
+  <div class="card" id="res" hidden>
+    <div class="step"><div class="num">2</div><h2>报文列表</h2></div>
+    <div class="tf">
+      <input id="tq" placeholder="筛选 ID：如 788 7DF，范围 700-7FF；留空显示全部" autocomplete="off" spellcheck="false">
+      <button id="tAll">全部</button>
+      <span class="cnt" id="tCnt"></span>
+    </div>
+    <div class="trace">
+      <div class="trow thead"><span>时间 s</span><span>通道</span><span>ID</span><span>方向</span><span>长度</span><span>数据</span></div>
+      <div class="tview" id="tv" tabindex="0"><div id="tsp"></div></div>
+    </div>
+    <p class="hint">点一行查看完整数据，选中后可用 ↑ ↓ 键切换。</p>
+    <div id="tdet"></div>
+  </div>
+</div>
+
+<script src="canlog.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const hexId = id => '0x' + (id & 0x1FFFFFFF).toString(16).toUpperCase() + (id & CanLog.EXT ? 'x' : '');
+const hexOf = (u8, max) => {
+  let s = '';
+  for (let i = 0; i < u8.length && (!max || i < max); i++) s += (i ? ' ' : '') + u8[i].toString(16).toUpperCase().padStart(2, '0');
+  return s + (max && u8.length > max ? ' …' : '');
+};
+const ROW = 24;
+let LOG = null, TIDX = new Uint32Array(0), TSEL = -1;
+
+async function openFile(f) {
+  if (!f) return;
+  $('bar').hidden = false;
+  const bar = $('bar').firstElementChild;
+  bar.style.width = '2%';
+  $('info').innerHTML = `<p class="hint">正在读取 ${esc(f.name)} …</p>`;
+  try {
+    LOG = await CanLog.read(f.name, await f.arrayBuffer(), p => bar.style.width = Math.round(p * 100) + '%');
+    bar.style.width = '100%';
+    let fd = 0;
+    for (let i = 0; i < LOG.n; i++) if (LOG.fl[i] & 2) fd++;
+    $('info').innerHTML = '<div class="kv">' +
+      `<div><small>文件</small>${esc(f.name)}</div><div><small>时长</small>${LOG.dur.toFixed(2)} s</div>` +
+      `<div><small>帧数</small>${LOG.n}${fd ? `（FD ${fd}）` : ''}</div>` +
+      `<div><small>通道</small>${[...new Set(LOG.ch)].sort().map(c => 'CAN' + c).join(' ') || '-'}</div>` +
+      `<div><small>报文 ID</small>${LOG.byId.size} 个</div></div>`;
+    $('res').hidden = false;
+    TSEL = -1;
+    $('tdet').innerHTML = '';
+    filterTrace();
+  } catch (e) {
+    LOG = null;
+    $('info').innerHTML = `<div class="warn">读取失败：${esc(e.message || e)}</div>`;
+    $('res').hidden = true;
+  }
+  setTimeout(() => $('bar').hidden = true, 600);
+}
+
+// 筛选：十六进制 ID（可带 0x，扩展帧可带 x 后缀）或范围 700-7FF
+function filterTrace() {
+  const toks = $('tq').value.trim().split(/[\s,，;；]+/).filter(Boolean);
+  if (!toks.length) TIDX = Uint32Array.from({ length: LOG.n }, (_, i) => i);
+  else {
+    const ids = new Set();
+    for (const id of LOG.byId.keys()) {
+      const raw = id & 0x1FFFFFFF;
+      for (const t of toks) {
+        const r = t.match(/^(?:0x)?([0-9a-f]+)\s*-\s*(?:0x)?([0-9a-f]+)$/i), h = t.match(/^(?:0x)?([0-9a-f]+)x?$/i);
+        if ((r && raw >= parseInt(r[1], 16) && raw <= parseInt(r[2], 16)) || (h && raw === parseInt(h[1], 16))) { ids.add(id); break; }
+      }
+    }
+    const a = [];
+    for (let i = 0; i < LOG.n; i++) if (ids.has(LOG.id[i])) a.push(i);
+    TIDX = Uint32Array.from(a);
+  }
+  $('tCnt').textContent = `显示 ${TIDX.length} / ${LOG.n} 帧`;
+  $('tsp').style.height = TIDX.length * ROW + 'px';
+  $('tv').scrollTop = 0;
+  drawTrace();
+}
+
+function drawTrace() {
+  const v = $('tv'), a = Math.max(0, Math.floor(v.scrollTop / ROW) - 5), b = Math.min(TIDX.length, a + Math.ceil(v.clientHeight / ROW) + 10);
+  let h = '';
+  for (let k = a; k < b; k++) {
+    const i = TIDX[k], d = LOG.bytes(i);
+    h += `<div class="trow${i === TSEL ? ' sel' : ''}" style="top:${k * ROW}px" data-i="${i}">` +
+      `<span>${LOG.t[i].toFixed(6)}</span><span>CAN${LOG.ch[i]}</span><span>${hexId(LOG.id[i])}</span>` +
+      `<span>${LOG.fl[i] & 1 ? 'Tx' : 'Rx'}</span><span>${LOG.fl[i] & 4 ? 'R' : d.length}${LOG.fl[i] & 2 ? ' FD' : ''}</span><span>${hexOf(d, 24)}</span></div>`;
+  }
+  $('tsp').innerHTML = h;
+}
+
+function selTrace(i, scroll) {
+  TSEL = i;
+  drawTrace();
+  if (scroll) {
+    const k = TIDX.indexOf(i), v = $('tv');
+    if (k * ROW < v.scrollTop) v.scrollTop = k * ROW;
+    else if ((k + 1) * ROW > v.scrollTop + v.clientHeight) v.scrollTop = (k + 1) * ROW - v.clientHeight;
+  }
+  const d = LOG.bytes(i);
+  $('tdet').innerHTML = `<div class="kv"><div><small>时间</small>${LOG.t[i].toFixed(6)} s</div>` +
+    `<div><small>通道</small>CAN${LOG.ch[i]}</div><div><small>ID</small>${hexId(LOG.id[i])}${LOG.fl[i] & 2 ? ' · CAN FD' : ''}</div>` +
+    `<div><small>方向 / 长度</small>${LOG.fl[i] & 1 ? 'Tx' : 'Rx'} · ${d.length} 字节</div></div>` +
+    `<div class="hexg">${hexOf(d) || '（无数据）'}</div>`;
+  if (!scroll && window.innerWidth < 640) $('tdet').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+$('tv').addEventListener('scroll', () => requestAnimationFrame(drawTrace));
+$('tv').addEventListener('click', e => { const r = e.target.closest('.trow'); if (r) selTrace(+r.dataset.i); });
+$('tv').addEventListener('keydown', e => {
+  if (TSEL < 0 || !['ArrowDown', 'ArrowUp'].includes(e.key)) return;
+  e.preventDefault();
+  const k = TIDX.indexOf(TSEL) + (e.key === 'ArrowDown' ? 1 : -1);
+  if (k >= 0 && k < TIDX.length) selTrace(TIDX[k], true);
+});
+let ttimer;
+$('tq').addEventListener('input', () => { clearTimeout(ttimer); ttimer = setTimeout(() => LOG && filterTrace(), 300); });
+$('tAll').onclick = () => { $('tq').value = ''; LOG && filterTrace(); };
+
+$('file').addEventListener('change', e => { openFile(e.target.files[0]); e.target.value = ''; });
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => openFile(e.dataTransfer.files[0]));
+</script>
+</body>
+</html>
