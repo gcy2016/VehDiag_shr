@@ -43,6 +43,11 @@
   .tview .trow { position: absolute; left: 0; right: 0; cursor: pointer; }
   .tview .trow:hover { background: #f5f8fc; }
   .tview .trow.sel { background: var(--blue); color: #fff; }
+  .tview .trow.pick { background: #d6e5f6; }
+  .tview .trow.pick.sel { background: var(--blue); }
+  .selbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; font-size: 14px; }
+  .selbar button { border: 1.5px solid var(--line); background: #fff; border-radius: 8px; padding: 4px 10px; font-size: 13px; cursor: pointer; color: var(--blue-d); }
+  .selbar button.on { background: var(--blue); border-color: var(--blue); color: #fff; }
   .hexg { font: 13px/1.7 ui-monospace, Menlo, Consolas, monospace; background: #f8fafc; border-radius: 10px; padding: 8px 12px; word-break: break-all; margin-top: 8px; }
   [hidden] { display: none !important; }
   @media (max-width: 640px) {
@@ -80,7 +85,8 @@
       <div class="trow thead"><span>时间 s</span><span>通道</span><span>ID</span><span>方向</span><span>长度</span><span>数据</span></div>
       <div class="tview" id="tv" tabindex="0"><div id="tsp"></div></div>
     </div>
-    <p class="hint">点一行查看完整数据，选中后可用 ↑ ↓ 键切换。</p>
+    <div class="selbar">已选 <b id="selN">0</b> 帧（发给 AI 助手）<button id="selMode">多选：关</button><button id="selAll">全选筛选结果</button><button id="selClr">清除选择</button></div>
+    <p class="hint">点一行查看完整数据，↑ ↓ 键切换。挑选报文：电脑上 Shift+点击 选一段、Ctrl（⌘）+点击 逐条增减；手机上打开“多选”后点击即可勾选。</p>
     <div id="tdet"></div>
   </div>
 
@@ -103,7 +109,7 @@ const hexOf = (u8, max) => {
   return s + (max && u8.length > max ? ' …' : '');
 };
 const ROW = 24;
-let LOG = null, LOGNAME = '', TIDX = new Uint32Array(0), TSEL = -1;
+let LOG = null, LOGNAME = '', TIDX = new Uint32Array(0), TSEL = -1, PICK = new Set(), MULTI = false;
 
 async function openFile(f) {
   if (!f) return;
@@ -124,6 +130,7 @@ async function openFile(f) {
       `<div><small>报文 ID</small>${LOG.byId.size} 个</div></div>`;
     $('res').hidden = false;
     TSEL = -1;
+    PICK.clear(); $('selN').textContent = 0;
     $('tdet').innerHTML = '';
     filterTrace();
   } catch (e) {
@@ -162,7 +169,7 @@ function drawTrace() {
   let h = '';
   for (let k = a; k < b; k++) {
     const i = TIDX[k], d = LOG.bytes(i);
-    h += `<div class="trow${i === TSEL ? ' sel' : ''}" style="top:${k * ROW}px" data-i="${i}">` +
+    h += `<div class="trow${i === TSEL ? ' sel' : ''}${PICK.has(i) ? ' pick' : ''}" style="top:${k * ROW}px" data-i="${i}">` +
       `<span>${LOG.t[i].toFixed(6)}</span><span>CAN${LOG.ch[i]}</span><span>${hexId(LOG.id[i])}</span>` +
       `<span>${LOG.fl[i] & 1 ? 'Tx' : 'Rx'}</span><span>${LOG.fl[i] & 4 ? 'R' : d.length}${LOG.fl[i] & 2 ? ' FD' : ''}</span><span>${hexOf(d, 24)}</span></div>`;
   }
@@ -186,7 +193,27 @@ function selTrace(i, scroll) {
 }
 
 $('tv').addEventListener('scroll', () => requestAnimationFrame(drawTrace));
-$('tv').addEventListener('click', e => { const r = e.target.closest('.trow'); if (r) selTrace(+r.dataset.i); });
+// 挑选报文：Shift 选一段、Ctrl/⌘ 逐条、手机“多选”模式点击即勾选
+const MAXPICK = 300;
+function pickUpd() { $('selN').textContent = PICK.size; drawTrace(); }
+$('tv').addEventListener('click', e => {
+  const r = e.target.closest('.trow');
+  if (!r) return;
+  const i = +r.dataset.i;
+  if (e.shiftKey && TSEL >= 0) {
+    let a = TIDX.indexOf(TSEL), b = TIDX.indexOf(i);
+    if (a > b) [a, b] = [b, a];
+    for (let k = a; k <= b && PICK.size < MAXPICK; k++) PICK.add(TIDX[k]);
+  } else if (e.ctrlKey || e.metaKey || MULTI) {
+    if (PICK.has(i)) PICK.delete(i); else if (PICK.size < MAXPICK) PICK.add(i);
+  }
+  if (PICK.size >= MAXPICK) $('selN').title = `最多 ${MAXPICK} 帧`;
+  selTrace(i);
+  pickUpd();
+});
+$('selMode').onclick = () => { MULTI = !MULTI; $('selMode').textContent = '多选：' + (MULTI ? '开' : '关'); $('selMode').classList.toggle('on', MULTI); };
+$('selAll').onclick = () => { if (!LOG) return; for (let k = 0; k < TIDX.length && PICK.size < MAXPICK; k++) PICK.add(TIDX[k]); pickUpd(); };
+$('selClr').onclick = () => { PICK.clear(); pickUpd(); };
 $('tv').addEventListener('keydown', e => {
   if (TSEL < 0 || !['ArrowDown', 'ArrowUp'].includes(e.key)) return;
   e.preventDefault();
@@ -208,6 +235,11 @@ drop.addEventListener('drop', e => openFile(e.dataTransfer.files[0]));
 const rowText = i => `${LOG.t[i].toFixed(6)}  CAN${LOG.ch[i]}  ${hexId(LOG.id[i])}  ${LOG.fl[i] & 1 ? 'Tx' : 'Rx'}  ${LOG.bytes(i).length}${LOG.fl[i] & 2 ? 'FD' : ''}  ${hexOf(LOG.bytes(i))}`;
 AI.mount($('ai'), () => {
   if (!LOG) return { view: 'log' };
+  if (PICK.size) {
+    const sel = [...PICK].sort((x, y) => x - y);
+    return { view: 'log', log: LOG, logName: LOGNAME,
+      frames: `【选取的报文】共 ${sel.length} 帧（时间 s / 通道 / ID / 方向 / 长度 / 数据）：\n` + sel.map(rowText).join('\n') };
+  }
   const k = TSEL >= 0 ? TIDX.indexOf(TSEL) : 0, a = Math.max(0, k - 20), b = Math.min(TIDX.length, a + 40);
   const rows = [];
   for (let j = a; j < b; j++) rows.push((TIDX[j] === TSEL ? '>> ' : '   ') + rowText(TIDX[j]));
@@ -217,7 +249,7 @@ AI.mount($('ai'), () => {
     trace: TSEL >= 0 ? rowText(TSEL) : '',
     frames: `【报文列表】筛选：${q || '全部'}（共 ${TIDX.length} 帧），以下为第 ${a + 1}–${b} 帧（时间 s / 通道 / ID / 方向 / 长度 / 数据，>> 为选中行）：\n` + rows.join('\n'),
   };
-}, { qs: ['解释一下选中的报文', '这些诊断报文在做什么？', '有没有否定响应或异常？', '下一步该怎么排查？'] });
+}, { qs: ['逐条解释这些报文', '这些诊断报文在做什么？', '有没有否定响应或异常？', '下一步该怎么排查？'] });
 </script>
 </body>
 </html>
