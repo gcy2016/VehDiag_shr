@@ -78,6 +78,8 @@
   .up b { color: var(--blue); display: block; font-size: 16px; }
   .up.ok { border-style: solid; border-color: #c9dbf0; background: var(--blue-l); color: var(--blue-d); }
   .up.over { border-color: var(--blue); background: var(--blue-l); }
+  .up.flash { animation: flash .5s ease-in-out 3; }
+  @keyframes flash { 50% { border-color: var(--blue); background: var(--blue-l); } }
   .ld { font-size: 13px; color: var(--muted); margin-top: 8px; }
   .ld button { border: 0; background: none; color: var(--red); cursor: pointer; font-size: 13px; padding: 0 4px; }
   .search { display: flex; gap: 8px; }
@@ -237,7 +239,14 @@ function show(v, silent) {
   $('vDtc').hidden = v !== 'dtc';
   $('vLog').hidden = v !== 'log';
   document.body.classList.toggle('wide', v === 'log');
-  if (v === 'dtc' && !silent) $('q').focus();
+  if (v === 'dtc' && !silent) {
+    if (model) $('q').focus();
+    else {                                       // 还没加载问卷：先带到“加载诊断问卷”，并闪一下提示
+      const up = $('upQn');
+      up.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      up.classList.remove('flash'); void up.offsetWidth; up.classList.add('flash');
+    }
+  }
   if (v === 'log' && LOG) drawTrace();
 }
 document.querySelectorAll('.fns button').forEach(b => b.onclick = () => show(b.dataset.v));
@@ -288,6 +297,7 @@ async function loadQn(f) {
     if (!store.set('shr_qn', JSON.stringify(DB))) NOTE = '问卷太大，未能记在本机，下次需要重新选择';
     renderLoaded();
     pick(0);
+    $('q').focus();                              // 加载好后直接到输入故障码
   } catch (e) { alert('诊断问卷读取失败：' + (e.message || e)); renderLoaded(); }
 }
 
