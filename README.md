@@ -14,7 +14,7 @@
 ## 🔍 故障码查询
 - 先加载诊断问卷 Excel（.xlsx，只在本机浏览器内读取，加载后记在本机，下次不用重选）；有多个 Sheet 时选择对应的车型 / 配置
 - 输入显示码或高中低字节，查故障描述、可能原因、维修建议；AI 助手会附带查询的故障码和问卷内容
-- 问卷格式与通用版（VehDiag_gnl）相同，见 `诊断问卷模板.xlsx`：表头含 `DTC Number`（右边两列为高中字节、低字节）、`Faults Types`、`Possible Fault`、`Corrective`（各占中文、英文两列）
+- 问卷格式与通用版（VehDiag_gnl）相同：表头含 `DTC Number`（右边两列为高中字节、低字节）、`Faults Types`、`Possible Fault`、`Corrective`（各占中文、英文两列），其他无关的列会自动忽略
 
 本仓库不含 DBC、真实诊断问卷，也不在网页里解析报文。
 
